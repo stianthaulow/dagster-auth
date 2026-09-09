@@ -1,0 +1,66 @@
+[project]
+name = "dagster-authentication"
+version = "0.1.0"
+description = "Microsoft Entra ID authentication and role-based authorisation for the self-hosted Dagster webserver"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10,<3.15"
+authors = [{ name = "Kevork Keheian" }]
+keywords = ["dagster", "authentication", "entra", "azure-ad", "oidc", "rbac", "sso"]
+classifiers = [
+    # No "Framework :: Dagster" classifier exists in the trove list, and the
+    # "License ::" classifiers are superseded by the license expression above.
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Systems Administration :: Authentication/Directory",
+]
+
+dependencies = [
+    # Dagster's webserver internals are used directly, so the range is
+    # deliberately narrow. See "Compatibility" in the README.
+    "dagster>=1.10.0,<2.0.0",
+    "dagster-webserver>=1.10.0,<2.0.0",
+    # Imported directly rather than relied on transitively.
+    "click>=8.0.0",
+    "graphql-core>=3.2.0",
+    "itsdangerous>=2.2.0",
+    "msal>=1.31.0,<2.0.0",
+    "python-dotenv>=1.0.0",
+    "starlette>=0.37.0",
+    "uvicorn>=0.30.0",
+]
+
+[project.optional-dependencies]
+# Only the identity-app authorizer needs a database driver; the allow-list
+# authorizer works with no extra dependencies.
+identity = ["pyodbc>=5.0.0"]
+
+[project.scripts]
+dagster-authentication = "dagster_authentication.serve:main"
+
+[project.urls]
+Homepage = "https://github.com/flowbytedev/dagster-authentication"
+Issues = "https://github.com/flowbytedev/dagster-authentication/issues"
+
+[dependency-groups]
+dev = ["pytest>=8.0.0", "ruff>=0.6.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dagster_authentication"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
