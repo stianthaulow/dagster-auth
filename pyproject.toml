@@ -41,8 +41,11 @@ identity = ["pyodbc>=5.0.0"]
 dagster-authentication = "dagster_authentication.serve:main"
 
 [project.urls]
-Homepage = "https://github.com/flowbytedev/dagster-authentication"
-Issues = "https://github.com/flowbytedev/dagster-authentication/issues"
+# The distribution is dagster-authentication; the repository is dagster-auth.
+# They deliberately differ - PyPI does not require them to match, and the
+# trusted publisher on PyPI is registered against the repository name.
+Homepage = "https://github.com/flowbytedev/dagster-auth"
+Issues = "https://github.com/flowbytedev/dagster-auth/issues"
 
 [dependency-groups]
 dev = ["pytest>=8.0.0", "ruff>=0.6.0"]

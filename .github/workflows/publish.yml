@@ -1,9 +1,27 @@
 name: Publish
 
 # Publishes to PyPI when a version tag is pushed. Uses trusted publishing, so
-# no API token is stored in the repo - configure the publisher once at
-# https://pypi.org/manage/project/dagster-authentication/settings/publishing/
-# (workflow name: publish.yml, environment: pypi).
+# no API token is stored in the repo.
+#
+# BEFORE THE FIRST RELEASE, register a *pending* publisher. The project does
+# not exist on PyPI yet, so the per-project settings page does not exist
+# either; use the account-level page instead:
+#
+#   https://pypi.org/manage/account/publishing/  ->  "Add a new pending publisher"
+#
+#   PyPI Project Name:  dagster-authentication
+#   Owner:              flowbytedev
+#   Repository name:    dagster-auth
+#   Workflow name:      publish.yml
+#   Environment name:   pypi
+#
+# Every field is matched exactly against the OIDC claims. Renaming the GitHub
+# repository after registering breaks the match and the publish fails with
+# `invalid-publisher` - update the publisher on PyPI when you rename.
+#
+# After the first successful publish the pending publisher becomes a normal
+# one, editable at:
+#   https://pypi.org/manage/project/dagster-authentication/settings/publishing/
 
 on:
   push:
