@@ -14,7 +14,13 @@ import logging
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from dagster_authentication.config import AuthConfig
-from dagster_authentication.rbac import WRITE_ROUTE_PREFIXES, Role, may_call, mutation_names, ws_frame_allowed
+from dagster_authentication.rbac import (
+    WRITE_ROUTE_PREFIXES,
+    Role,
+    may_call,
+    mutation_names,
+    ws_frame_allowed,
+)
 
 logger = logging.getLogger("dagster_authentication")
 

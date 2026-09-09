@@ -222,9 +222,9 @@ def main(
 
     setup_interrupt_handlers()
 
-    with get_possibly_temporary_instance_for_cli(cli_command="dagster-authentication", logger=logger) as (
-        instance
-    ):
+    with get_possibly_temporary_instance_for_cli(
+        cli_command="dagster-authentication", logger=logger
+    ) as instance:
         instance.optimize_for_webserver(
             db_statement_timeout, db_pool_recycle, db_pool_max_overflow
         )

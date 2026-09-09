@@ -226,5 +226,7 @@ class IdentityAppAuthorizer:
                 f"({self.config.admin_app_id}). Ask an administrator to grant it in Identity.",
             )
 
-        logger.debug("identity lookup for oid %s: granted %s -> %s", oid, sorted(granted), role.name)
+        logger.debug(
+            "identity lookup for oid %s: granted %s -> %s", oid, sorted(granted), role.name
+        )
         return Decision.allow(role)

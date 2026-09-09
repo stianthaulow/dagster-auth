@@ -63,7 +63,9 @@ def test_admin_by_object_id():
 
 
 def test_viewer_list_grants_viewer():
-    authorizer = AllowListAuthorizer(frozenset({"grace@example.com"}), frozenset({"ada@example.com"}))
+    authorizer = AllowListAuthorizer(
+        frozenset({"grace@example.com"}), frozenset({"ada@example.com"})
+    )
     assert authorizer.decide(claims()).role is Role.VIEWER
 
 

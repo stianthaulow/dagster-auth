@@ -207,7 +207,8 @@ def test_null_and_duplicate_rows_are_tolerated():
 
 def test_denial_names_the_application_so_the_user_can_ask_for_it():
     connection = FakeConnection(rows=[])
-    decision = IdentityAppAuthorizer(make_config(), connect=lambda _cfg: connection).decide(claims())
+    authorizer = IdentityAppAuthorizer(make_config(), connect=lambda _cfg: connection)
+    decision = authorizer.decide(claims())
     assert ADMIN_APP in decision.message
     assert ADMIN_APP in decision.reason
 
