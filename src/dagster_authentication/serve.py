@@ -103,7 +103,28 @@ def build_app(
     )
 
 
+class _DotenvCommand(click.Command):
+    """Loads ``.env`` before Click resolves any option.
+
+    Options backed by environment variables (--ssl-certfile, --authorizer, ...)
+    take their values while the arguments are parsed, so the file has to be in
+    the environment by then. Dagster loads .env from the working directory too,
+    but only once it builds the instance - far too late for these options or the
+    auth config. So load it here, from the same place Dagster looks (cwd, no
+    upward search). override=False means a real environment variable always
+    beats the file, and an explicit CLI value beats both.
+    """
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        env_file = Path.cwd() / ".env"
+        if env_file.is_file():
+            load_dotenv(env_file, override=False)
+            ctx.meta["dagster_authentication.env_file"] = env_file
+        return super().parse_args(ctx, args)
+
+
 @click.command(
+    cls=_DotenvCommand,
     name="dagster-authentication",
     help="Run the Dagster webserver with Microsoft Entra ID authentication.",
 )
@@ -180,14 +201,8 @@ def main(
 
     configure_loggers(formatter=log_format, log_level=dagster_log_level.upper())
 
-    # Dagster loads .env from the working directory too, but only once it builds
-    # the instance - which happens well after the auth config is read below. So
-    # load it here first, from the same place Dagster looks (cwd, no upward
-    # search). override=False means a real environment variable always beats
-    # the file, which is the precedence you want in production.
-    env_file = Path.cwd() / ".env"
-    if env_file.is_file():
-        load_dotenv(env_file, override=False)
+    env_file = click.get_current_context().meta.get("dagster_authentication.env_file")
+    if env_file:
         logger.info("Loaded %s", env_file)
 
     if allow_insecure_http:
