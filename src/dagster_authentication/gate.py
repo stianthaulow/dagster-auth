@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 
+from starlette.datastructures import QueryParams
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from dagster_authentication.config import AuthConfig
@@ -92,14 +93,17 @@ class AuthGate:
             await self.app(scope, guard.receive, guard.send)
             return
 
-        if scope.get("method") != "POST":
+        method = scope.get("method")
+        if method == "GET" and path == self._graphql_path:
+            await self._serve_restricted_graphql_params(role, scope, receive, send)
+            return
+
+        if method != "POST":
             await self.app(scope, receive, send)
             return
 
         if path.startswith(self._write_prefixes):
-            logger.warning(
-                "denied %s for role %s: non-GraphQL write endpoint", path, role.name
-            )
+            logger.warning("denied %s for role %s: non-GraphQL write endpoint", path, role.name)
             await self._forbid(send, "This session is read-only.")
             return
 
@@ -116,6 +120,15 @@ class AuthGate:
         receive: Receive,
         send: Send,
     ) -> None:
+        # Dagster picks the operation's source from the Content-Type: a JSON
+        # body, a raw GraphQL body, or otherwise the URL parameters, ignoring
+        # the body. Vet whichever source Dagster will execute, so a harmless
+        # body cannot cover for a mutation in the URL.
+        content_type = _header(scope, b"content-type")
+        if "application/json" not in content_type and "application/graphql" not in content_type:
+            await self._serve_restricted_graphql_params(role, scope, receive, send)
+            return
+
         body, disconnected = await _read_body(receive)
         if disconnected:
             return
@@ -123,23 +136,61 @@ class AuthGate:
             await self._forbid(send, "Request body too large to authorise.")
             return
 
-        mutations = mutation_names(body)
-        if not may_call(role, mutations):
-            logger.warning(
-                "denied GraphQL for role %s: %s",
-                role.name,
-                "unparseable payload" if mutations is None else ", ".join(sorted(mutations)),
-            )
-            await self._forbid(send, "This session is read-only.")
+        if "application/json" in content_type:
+            mutations = mutation_names(body)
+        else:
+            try:
+                query = body.decode()
+            except UnicodeDecodeError:
+                mutations = None
+            else:
+                mutations = mutation_names(json.dumps({"query": query}).encode())
+
+        if await self._vet(role, mutations, send):
+            await self.app(scope, _replay_body(body), send)
+
+    async def _serve_restricted_graphql_params(
+        self,
+        role: Role,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        # Dagster executes a GET to /graphql from its URL parameters, mutations
+        # included, and does the same for a POST that is neither JSON nor raw
+        # GraphQL. Parse them the way Dagster does (Starlette's QueryParams) so
+        # we inspect what it runs.
+        params = QueryParams(scope.get("query_string", b""))
+        if "query" not in params:
+            # Nothing to execute: Dagster renders GraphiQL or answers 400.
+            await self.app(scope, receive, send)
             return
 
-        await self.app(scope, _replay_body(body), send)
+        if len(params.getlist("query")) > 1 or len(params.getlist("operationName")) > 1:
+            # Repeated parameters leave it to the parser which one wins.
+            mutations = None
+        else:
+            payload = {"query": params["query"], "operationName": params.get("operationName")}
+            mutations = mutation_names(json.dumps(payload).encode())
+
+        if await self._vet(role, mutations, send):
+            await self.app(scope, receive, send)
+
+    async def _vet(self, role: Role, mutations: frozenset[str] | None, send: Send) -> bool:
+        """Whether ``role`` may run ``mutations``. Sends the 403 when it may not."""
+        if may_call(role, mutations):
+            return True
+        logger.warning(
+            "denied GraphQL for role %s: %s",
+            role.name,
+            "unparseable payload" if mutations is None else ", ".join(sorted(mutations)),
+        )
+        await self._forbid(send, "This session is read-only.")
+        return False
 
     # ---------------------------------------------------------------- denials
 
-    async def _reject_unauthenticated(
-        self, scope: Scope, receive: Receive, send: Send
-    ) -> None:
+    async def _reject_unauthenticated(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "websocket":
             await receive()  # consume websocket.connect before rejecting
             await send({"type": "websocket.close", "code": WS_UNAUTHENTICATED})
@@ -222,6 +273,18 @@ class _RestrictedWebSocket:
 
 
 # --------------------------------------------------------------------- helpers
+
+
+def _header(scope: Scope, name: bytes) -> str:
+    """The first value of a request header, as Starlette's ``Headers.get`` sees it.
+
+    Names are compared exactly, not case-folded: Starlette matches only the
+    lowercase name, so a mixed-case duplicate must not be the one we vet.
+    """
+    for key, value in scope.get("headers") or ():
+        if key == name:
+            return value.decode("latin-1")
+    return ""
 
 
 async def _read_body(receive: Receive) -> tuple[bytes | None, bool]:
